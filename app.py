@@ -79,10 +79,18 @@ for _, r in st.session_state.data.iterrows():
 # Відображення карти
 map_res = st_folium(m, width="100%", height=350, key="map")
 
-# Отримуємо координати з кліку
-clicked_lat = map_res.get("last_clicked", {}).get("lat", center[0])
-clicked_lon = map_res.get("last_clicked", {}).get("lng", center[1])
-
+# Отримуємо координати з кліку безпечно
+if map_res and map_res.get("last_clicked"):
+    clicked_lat = map_res["last_clicked"]["lat"]
+    clicked_lon = map_res["last_clicked"]["lng"]
+else:
+    # Якщо кліку не було, беремо центр карти або останню точку з бази
+    if not st.session_state.data.empty:
+        clicked_lat = st.session_state.data['lat'].iloc[-1]
+        clicked_lon = st.session_state.data['lon'].iloc[-1]
+    else:
+        clicked_lat = center[0]
+        clicked_lon = center[1]
 # ФОРМА РУЧНОГО ВВОДУ (під картою)
 with st.form("input_form", clear_on_submit=False):
     st.markdown(f"📍 **Координати:** `{clicked_lat:.5f}, {clicked_lon:.5f}`")
