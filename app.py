@@ -114,7 +114,7 @@ for _, r in st.session_state.data.iterrows():
         )
     ).add_to(m)
 
-# 4. Якщо є зафіксований клік — ставимо ЧЕРВОНИЙ маркер ДО рендерингу karty
+# 4. Якщо є зафіксований клік — ставимо ЧЕРВОНИЙ маркер ДО рендерингу карти
 if clicked_lat is not None and clicked_lon is not None:
     folium.Marker(
         [clicked_lat, clicked_lon],
@@ -152,13 +152,15 @@ with st.form("input_form"):
     
     if st.form_submit_button("✅ ЗБЕРЕГТИ ВИМІРЮВАННЯ"):
         new_point = pd.DataFrame([{"lat": curr_lat, "lon": curr_lon, "value": val, "unit": unit, "time": auto_time}])
-        st.session_state.data = pd.concat([st.session_state.data, new_point], ignore_ignore=True)
+        st.session_state.data = pd.concat([st.session_state.data, new_point], ignore_index=True)
         save_to_disk()
         
         # Очищаємо тимчасовий маркер після збереження
         st.session_state["last_lat"] = None
         st.session_state["last_lon"] = None
-        st.rerun()# Видалення останньої точки
+        st.rerun()
+
+# Видалення останньої точки
 if not st.session_state.data.empty:
     st.markdown('<div class="undo-btn">', unsafe_allow_html=True)
     if st.button("⬅️ ВИДАЛИТИ ОСТАННЮ ТОЧКУ"):
