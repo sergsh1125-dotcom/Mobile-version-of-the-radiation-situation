@@ -34,7 +34,7 @@ st.markdown("""
 # 2. Функція HTML-підпису (Дріб)
 # ===============================
 def get_fraction_label_html(value_str, date_str):
-    """Генерує HTML для синього дробу: Чисельник = Потужність, Знаменник = Дата"""
+    """Генерує HTML для синього дробу: Чисельник = Ціла потужність, Знаменник = Дата"""
     return f"""
     <div style="
         display: inline-flex; 
@@ -92,7 +92,8 @@ m = folium.Map(location=center, zoom_start=13, prefer_canvas=True)
 
 # 3. Відмалювання вже збережених точок з бази (Синя крапка + Дріб)
 for _, r in st.session_state.data.iterrows():
-    v_s = f"{float(r['value']):.2f} {r['unit']}"
+    # Округлення до цілого значення (.0f)
+    v_s = f"{int(round(float(r['value'])))} {r['unit']}"
     t_s = str(r['time'])
     
     folium.CircleMarker(
@@ -130,7 +131,6 @@ if map_res and map_res.get("last_clicked"):
     new_lat = map_res["last_clicked"]["lat"]
     new_lon = map_res["last_clicked"]["lng"]
     
-    # Якщо клікнули в нове місце — зберігаємо в session_state і перезапускаємо для відображення маркера
     if st.session_state.get("last_lat") != new_lat or st.session_state.get("last_lon") != new_lon:
         st.session_state["last_lat"] = new_lat
         st.session_state["last_lon"] = new_lon
@@ -147,11 +147,12 @@ curr_lon = clicked_lon if clicked_lon is not None else center[1]
 with st.form("input_form"):
     st.markdown(f"📍 **Обрано координати:** `{curr_lat:.5f}, {curr_lon:.5f}` | 🕒 `{auto_time}`")
     
-    val = st.number_input("Потужність дози", format="%.2f", step=0.01)
+    # Формат "%.0f" та step=1 для введення цілих чисел
+    val = st.number_input("Потужність дози", format="%.0f", step=1, value=0)
     unit = st.selectbox("Одиниця", ["мкЗв/год", "мЗв/год"])
     
     if st.form_submit_button("✅ ЗБЕРЕГТИ ВИМІРЮВАННЯ"):
-        new_point = pd.DataFrame([{"lat": curr_lat, "lon": curr_lon, "value": val, "unit": unit, "time": auto_time}])
+        new_point = pd.DataFrame([{"lat": curr_lat, "lon": curr_lon, "value": int(val), "unit": unit, "time": auto_time}])
         st.session_state.data = pd.concat([st.session_state.data, new_point], ignore_index=True)
         save_to_disk()
         
@@ -178,7 +179,7 @@ st.subheader("📊 Звіти")
 if not st.session_state.data.empty:
     export_map = folium.Map(location=[st.session_state.data.lat.mean(), st.session_state.data.lon.mean()], zoom_start=12)
     for _, r in st.session_state.data.iterrows():
-        v_s = f"{float(r['value']):.2f} {r['unit']}"
+        v_s = f"{int(round(float(r['value'])))} {r['unit']}"
         t_s = str(r['time'])
         
         folium.CircleMarker(
