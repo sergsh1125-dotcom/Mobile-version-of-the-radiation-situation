@@ -62,7 +62,7 @@ def get_fraction_label_html(value_str, date_str):
     """
 
 # ===============================
-# 3. Інтерфейс
+# 3. Інтерфейс та Карта
 # ===============================
 st.title("☢️ RAD-MOBILE PRO")
 
@@ -75,20 +75,26 @@ if st.button("📘 ІНСТРУКЦІЯ ЩОДО РОБОТИ"):
 
 st.divider()
 
+# 1. Отримуємо збережені координати попереднього кліку з session_state
+clicked_lat = st.session_state.get("last_lat", None)
+clicked_lon = st.session_state.get("last_lon", None)
+
 # Визначення центру карти
-if not st.session_state.data.empty:
+if clicked_lat is not None and clicked_lon is not None:
+    center = [clicked_lat, clicked_lon]
+elif not st.session_state.data.empty:
     center = [st.session_state.data['lat'].iloc[-1], st.session_state.data['lon'].iloc[-1]]
 else:
     center = [50.45, 30.52]
 
+# 2. Створюємо карту
 m = folium.Map(location=center, zoom_start=13, prefer_canvas=True)
 
-# Відмалювання збережених точок вимірювання (Синя крапка + Дріб)
+# 3. Відмалювання вже збережених точок з бази (Синя крапка + Дріб)
 for _, r in st.session_state.data.iterrows():
     v_s = f"{float(r['value']):.2f} {r['unit']}"
     t_s = str(r['time'])
     
-    # 1. Синя точка діаметром ~1 мм (radius=3.5 px)
     folium.CircleMarker(
         location=[r.lat, r.lon],
         radius=3.5,
@@ -100,51 +106,59 @@ for _, r in st.session_state.data.iterrows():
         popup=f"Потужність: {v_s}<br>Час: {t_s}"
     ).add_to(m)
     
-    # 2. Підпис біля точки у вигляді дробу
     folium.Marker(
         [r.lat, r.lon],
         icon=folium.DivIcon(
-            icon_anchor=(-6, 18),  # Зміщення дробу трохи праворуч і вище точки
+            icon_anchor=(-6, 18),
             html=get_fraction_label_html(v_s, t_s)
         )
     ).add_to(m)
 
-# Відображення карти у Streamlit
-map_res = st_folium(m, width="100%", height=380, key="map", returned_objects=["last_clicked"])
-
-# Обробка кліку пальцем по карті
-if map_res and map_res.get("last_clicked"):
-    clicked_lat = map_res["last_clicked"]["lat"]
-    clicked_lon = map_res["last_clicked"]["lng"]
-    auto_time = pd.Timestamp.now(tz="Europe/Kyiv").strftime("%d.%m.%Y %H:%M")
-    
-    # Додаємо тимчасовий червоний маркер для візуалізації зафіксованої точки
+# 4. Якщо є зафіксований клік — ставимо ЧЕРВОНИЙ маркер ДО рендерингу karty
+if clicked_lat is not None and clicked_lon is not None:
     folium.Marker(
         [clicked_lat, clicked_lon],
         popup="Обрана точка",
         icon=folium.Icon(color="red", icon="info-sign")
     ).add_to(m)
-else:
-    clicked_lat = center[0]
-    clicked_lon = center[1]
-    auto_time = pd.Timestamp.now(tz="Europe/Kyiv").strftime("%d.%m.%Y %H:%M")
+
+# 5. Відображаємо карту та ловимо новий клік
+map_res = st_folium(m, width="100%", height=380, key="map", returned_objects=["last_clicked"])
+
+# 6. Оновлюємо стан кліку при взаємодії з картою
+if map_res and map_res.get("last_clicked"):
+    new_lat = map_res["last_clicked"]["lat"]
+    new_lon = map_res["last_clicked"]["lng"]
+    
+    # Якщо клікнули в нове місце — зберігаємо в session_state і перезапускаємо для відображення маркера
+    if st.session_state.get("last_lat") != new_lat or st.session_state.get("last_lon") != new_lon:
+        st.session_state["last_lat"] = new_lat
+        st.session_state["last_lon"] = new_lon
+        st.rerun()
+
+# Локальний час для форми
+auto_time = pd.Timestamp.now(tz="Europe/Kyiv").strftime("%d.%m.%Y %H:%M")
+curr_lat = clicked_lat if clicked_lat is not None else center[0]
+curr_lon = clicked_lon if clicked_lon is not None else center[1]
 
 # ===============================
 # 4. Форма внесення даних
 # ===============================
 with st.form("input_form"):
-    st.markdown(f"📍 **Обрано координати:** `{clicked_lat:.5f}, {clicked_lon:.5f}` | 🕒 `{auto_time}`")
+    st.markdown(f"📍 **Обрано координати:** `{curr_lat:.5f}, {curr_lon:.5f}` | 🕒 `{auto_time}`")
     
     val = st.number_input("Потужність дози", format="%.2f", step=0.01)
     unit = st.selectbox("Одиниця", ["мкЗв/год", "мЗв/год"])
     
     if st.form_submit_button("✅ ЗБЕРЕГТИ ВИМІРЮВАННЯ"):
-        new_point = pd.DataFrame([{"lat": clicked_lat, "lon": clicked_lon, "value": val, "unit": unit, "time": auto_time}])
-        st.session_state.data = pd.concat([st.session_state.data, new_point], ignore_index=True)
+        new_point = pd.DataFrame([{"lat": curr_lat, "lon": curr_lon, "value": val, "unit": unit, "time": auto_time}])
+        st.session_state.data = pd.concat([st.session_state.data, new_point], ignore_ignore=True)
         save_to_disk()
-        st.rerun()
-
-# Видалення останньої точки
+        
+        # Очищаємо тимчасовий маркер після збереження
+        st.session_state["last_lat"] = None
+        st.session_state["last_lon"] = None
+        st.rerun()# Видалення останньої точки
 if not st.session_state.data.empty:
     st.markdown('<div class="undo-btn">', unsafe_allow_html=True)
     if st.button("⬅️ ВИДАЛИТИ ОСТАННЮ ТОЧКУ"):
